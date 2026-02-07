@@ -1,0 +1,26 @@
+# Build artifacts
+build/
+cmake/
+CMakeFiles/
+CMakeCache.txt
+Makefile
+*.o
+*.elf
+*.hex
+*.bin
+*.map
+
+# STM32CubeIDE / CubeMX
+.settings/
+.mxproject
+mx.scratch
+
+# IDE / editor junk
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# Debug
+*.log
