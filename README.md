@@ -9,6 +9,11 @@ A two-wheeled self-balancing robot based on STM32F401 and MPU6500.
 ⬜ Sensor fusion  
 ⬜ Control algorithm (PID / LQR)
 
+## Progress
+- IMU accelerometer read via I2C
+- Motors respond to forward/backward tilt using thresholds
+
+
 ## Hardware
 - STM32F401CCU6
 - MPU6500 IMU

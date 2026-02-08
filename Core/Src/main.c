@@ -18,7 +18,10 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "stm32f4xx_hal.h"
+#include "stm32f4xx_hal_gpio.h"
+#include "stm32f4xx_hal_i2c.h"
+#include "stm32f4xx_hal_tim.h"
+#include <sys/types.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -32,7 +35,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define MPU6550_ADDR 0x68 << 1
+#define ACCEL_XOUT_H  0x3B
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -41,16 +45,20 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+I2C_HandleTypeDef hi2c1;
+
 TIM_HandleTypeDef htim3;
 
 /* USER CODE BEGIN PV */
-
+int16_t ax_raw, ay_raw, az_raw;
+uint8_t acc_buffer[6];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_TIM3_Init(void);
+static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -90,12 +98,14 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_TIM3_Init();
+  MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_PWM_Start( &htim3, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
 
   __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
   __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -105,26 +115,34 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    HAL_GPIO_WritePin(AIN1_GPIO_Port, AIN1_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(AIN2_GPIO_Port, AIN2_Pin, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(BIN1_GPIO_Port, BIN1_Pin, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(BIN2_GPIO_Port, BIN2_Pin, GPIO_PIN_RESET);
+    HAL_I2C_Mem_Read(&hi2c1, MPU6550_ADDR, ACCEL_XOUT_H, I2C_MEMADD_SIZE_8BIT, acc_buffer, 6, 100);
 
-    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 500);
-    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 500);
+    ax_raw = (int16_t)((acc_buffer[0] << 8) | acc_buffer[1]);
+    ay_raw = (int16_t)((acc_buffer[2] << 8) | acc_buffer[3]);
+    az_raw = (int16_t)((acc_buffer[4] << 8) | acc_buffer[5]);
 
-    HAL_Delay(5000);
-
+    if (ax_raw > 1000) {
+    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 300);
     HAL_GPIO_WritePin(AIN1_GPIO_Port, AIN1_Pin, GPIO_PIN_SET);
     HAL_GPIO_WritePin(AIN2_GPIO_Port, AIN2_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(BIN1_GPIO_Port, BIN1_Pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(BIN2_GPIO_Port, BIN2_Pin, GPIO_PIN_SET);
 
-    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 500);
-    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 500);
+    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);   // stop other motor
+    }
+    else if (ax_raw < -1000) {
+        __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 300);
+        HAL_GPIO_WritePin(BIN1_GPIO_Port, BIN1_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(BIN2_GPIO_Port, BIN2_Pin, GPIO_PIN_RESET);
 
-    HAL_Delay(5000);
-  }
+        __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);   // stop other motor
+    }
+    else {
+        // upright → stop everything
+        __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
+        __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
+    }
+
+
+    }
   /* USER CODE END 3 */
 }
 
@@ -167,6 +185,40 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C1_Init(void)
+{
+
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.ClockSpeed = 400000;
+  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
+
 }
 
 /**
@@ -249,9 +301,9 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, AIN2_Pin|AIN1_Pin|BIN1_Pin|BIN2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, AIN1_Pin|AIN2_Pin|BIN1_Pin|BIN2_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : AIN2_Pin AIN1_Pin BIN1_Pin BIN2_Pin */
+  /*Configure GPIO pins : AIN1_Pin AIN2_Pin BIN1_Pin BIN2_Pin */
   GPIO_InitStruct.Pin = AIN1_Pin|AIN2_Pin|BIN1_Pin|BIN2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
