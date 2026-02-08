@@ -21,6 +21,7 @@
 #include "stm32f4xx_hal_gpio.h"
 #include "stm32f4xx_hal_i2c.h"
 #include "stm32f4xx_hal_tim.h"
+#include <stdint.h>
 #include <sys/types.h>
 
 /* Private includes ----------------------------------------------------------*/
@@ -37,6 +38,7 @@
 /* USER CODE BEGIN PD */
 #define MPU6550_ADDR 0x68 << 1
 #define ACCEL_XOUT_H  0x3B
+#define MAX_PWM 999
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -121,22 +123,38 @@ int main(void)
     ay_raw = (int16_t)((acc_buffer[2] << 8) | acc_buffer[3]);
     az_raw = (int16_t)((acc_buffer[4] << 8) | acc_buffer[5]);
 
-    if (ax_raw > 1000) {
-    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 300);
-    HAL_GPIO_WritePin(AIN1_GPIO_Port, AIN1_Pin, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(AIN2_GPIO_Port, AIN2_Pin, GPIO_PIN_RESET);
-
-    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);   // stop other motor
+    uint16_t ax = (ax_raw >= 0) ? ax_raw : -ax_raw;
+    ax = ax/10; 
+    if (ax > MAX_PWM) {
+      ax = MAX_PWM;
     }
-    else if (ax_raw < -1000) {
-        __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 300);
-        HAL_GPIO_WritePin(BIN1_GPIO_Port, BIN1_Pin, GPIO_PIN_SET);
-        HAL_GPIO_WritePin(BIN2_GPIO_Port, BIN2_Pin, GPIO_PIN_RESET);
+    // scale down to fit in 0-999 for PWM duty cycle
 
-        __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);   // stop other motor
+    // USB SIDE
+    if (ax_raw > 1000) {
+      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, ax);
+      HAL_GPIO_WritePin(AIN1_GPIO_Port, AIN1_Pin, GPIO_PIN_SET);
+      HAL_GPIO_WritePin(AIN2_GPIO_Port, AIN2_Pin, GPIO_PIN_RESET);
+
+      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, ax);
+      HAL_GPIO_WritePin(BIN1_GPIO_Port, BIN1_Pin, GPIO_PIN_SET);
+      HAL_GPIO_WritePin(BIN2_GPIO_Port, BIN2_Pin, GPIO_PIN_RESET);
+
+    }
+    // PIN SIDE
+    else if (ax_raw < -1000) {
+      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, ax);
+      HAL_GPIO_WritePin(AIN1_GPIO_Port, AIN1_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(AIN2_GPIO_Port, AIN2_Pin, GPIO_PIN_SET);
+
+      __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, ax);
+      HAL_GPIO_WritePin(BIN1_GPIO_Port, BIN1_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(BIN2_GPIO_Port, BIN2_Pin, GPIO_PIN_SET);
+
     }
     else {
         // upright → stop everything
+        ax = 0;
         __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
         __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
     }
