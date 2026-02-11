@@ -24,3 +24,6 @@ mx.scratch
 
 # Debug
 *.log
+
+#IDK
+*.project
