@@ -18,6 +18,7 @@ A two-wheeled self-balancing robot based on STM32F401 and MPU6500.
 - STM32F401CCU6
 - MPU6500 IMU
 - TB6612FNG motor driver
+- N20 Microgear motors
 
 ## Toolchain
 - STM32CubeMX
